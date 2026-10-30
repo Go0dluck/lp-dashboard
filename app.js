@@ -5,8 +5,14 @@ const FULL_EVERY = 5 * 60_000;   // positions, fees, deposits
 const PRICE_EVERY = 30_000;      // pool prices only
 const CANDLES_EVERY = 60_000;
 
+const DEFAULT_WALLETS = [
+  { name: "Мой", address: "0x9a2d5a042dfc9e1445d8b57f9ce9e09a35a8cf6f" },
+];
+
 const state = {
-  wallets: store.get("lpdash.wallets", []),
+  // A fresh browser should be useful immediately. Once the person changes the
+  // list, their own selection in localStorage remains authoritative.
+  wallets: store.get("lpdash.wallets", DEFAULT_WALLETS),
   selected: store.get("lpdash.selected", "all"),
   data: {},            // address -> { positions, groups, failures, krystal, loadedAt, loading, error }
   groupId: store.get("lpdash.group", null),
