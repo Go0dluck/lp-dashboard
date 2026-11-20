@@ -159,8 +159,6 @@ function renderTabs() {
   const total = (ws) => ws.reduce((s, w) => s + groupsForWallet(w).reduce((x, g) => x + g.value, 0), 0);
   const tabs = [{ id: "all", name: "Все", value: total(state.wallets) }, ...state.wallets.map((w) => ({ id: w.address, name: w.name, value: total([w]) }))];
   el.innerHTML = tabs.map((t) => `<button class="tab" type="button" role="tab" data-tab="${t.id}" aria-selected="${t.id === state.selected}">${esc(t.name)}<span class="tab-value">${t.value ? usd(t.value) : ""}</span></button>`).join("");
-  const hiddenButton = document.getElementById("hidden-btn");
-  hiddenButton.hidden = state.hiddenPositions.size === 0;
   document.getElementById("hidden-count").textContent = state.hiddenPositions.size;
 }
 
@@ -275,18 +273,17 @@ function renderDetail() {
   const rows = g.positions.map((p) => {
     const dist = p.inRange ? "в диапазоне" : (g.price > p.highUSD ? "до входа " + pct(p.highUSD / g.price - 1) : "до входа " + pct(p.lowUSD / g.price - 1));
     const coinAmt = p.coin === 0 ? [p.amount0, p.token0.symbol, p.amount1, p.token1.symbol] : [p.amount1, p.token1.symbol, p.amount0, p.token0.symbol];
-    return `<tr><td><span class="badge-n ${p.inRange ? "in" : ""}">${p.number}</span></td>
+    return `<tr><td><span class="position-number"><span class="badge-n ${p.inRange ? "in" : ""}">${p.number}</span><button class="row-action" type="button" data-hide-position="${esc(positionKey(p, g.wallet.address))}" title="Скрыть позицию" aria-label="Скрыть позицию #${p.tokenId}">Скрыть</button></span></td>
       <td>${price(p.lowUSD)} – ${price(p.highUSD)}</td>
       <td class="text ${p.inRange ? "up" : "muted"}">${dist}</td>
       <td>${amount(coinAmt[0])} ${esc(coinAmt[1])} · ${amount(coinAmt[2])} ${esc(coinAmt[3])}</td>
       <td class="r">${usd(p.value)}</td><td class="r fees">${usd(p.fees)}</td>
       <td class="r ${pnlClass(p.pnl)}">${signedUsd(p.pnl)}</td>
-      <td><a href="${krystal(p)}" target="_blank" rel="noopener" title="Позиция в Krystal">#${p.tokenId}</a></td>
-      <td><button class="row-action" type="button" data-hide-position="${esc(positionKey(p, g.wallet.address))}" title="Скрыть позицию" aria-label="Скрыть позицию #${p.tokenId}">✕</button></td></tr>`;
+      <td><a href="${krystal(p)}" target="_blank" rel="noopener" title="Позиция в Krystal">#${p.tokenId}</a></td></tr>`;
   }).join("");
   document.getElementById("d-positions").innerHTML = `
     <div class="panel"><h3>Позиции (${g.positions.length})<small>диапазоны в $ за 1 ${esc(g.coin.symbol)}</small></h3>
-      <div class="table-wrap"><table><thead><tr><th>№</th><th>Диапазон</th><th>Где цена</th><th>Монеты</th><th class="r">Стоимость</th><th class="r">Комиссии</th><th class="r">PnL</th><th>NFT</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+      <div class="table-wrap"><table><thead><tr><th>Позиция</th><th>Диапазон</th><th>Где цена</th><th>Монеты</th><th class="r">Стоимость</th><th class="r">Комиссии</th><th class="r">PnL</th><th>NFT</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   document.getElementById("d-pools").innerHTML = `<div class="panel" id="pools-panel">${poolsHTML(g)}</div>`;
   ensureChart();
   drawLines(g);
