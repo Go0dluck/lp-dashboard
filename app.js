@@ -143,7 +143,7 @@ function setBusy(on) {
 // ---------- rendering ----------
 
 function groupsShown() {
-  return visibleWallets().flatMap(groupsForWallet).sort((a, b) => b.value - a.value);
+  return visibleWallets().flatMap((w) => groupsForWallet(w)).sort((a, b) => b.value - a.value);
 }
 
 function render() {
