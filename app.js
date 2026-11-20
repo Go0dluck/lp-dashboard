@@ -215,7 +215,7 @@ function renderGroups() {
   el.innerHTML = groups.map((g) => {
     const key = g.id + g.wallet.address;
     const pnlPct = g.pnl != null && g.deposited ? pct(g.pnl / g.deposited) : "";
-    return `<div class="card-wrap"><button class="card" type="button" data-group="${esc(key)}" aria-current="${key === state.groupId}">
+    return `<div class="card-wrap"><button class="card" type="button" data-group="${esc(key)}" data-status="${esc(g.status)}" aria-current="${key === state.groupId}">
       <div class="card-head">${coinIcon(g)}
         <div class="card-title"><b>${esc(g.pair)}</b><span>${esc(g.chainName)} · ${esc(g.project)} · ${fee(g.feeTier)}${state.selected === "all" && state.wallets.length > 1 ? " · " + esc(g.wallet.name) : ""}</span></div>
         <div class="card-right"><b>${usd(g.value)}</b><span>${price(g.price)}</span></div>
