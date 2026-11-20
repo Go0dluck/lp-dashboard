@@ -19,7 +19,7 @@ const CHAINS = {
   },
   56: {
     name: "BNB Chain", native: "BNB", wrapped: "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
-    rpc: ["https://bsc-rpc.publicnode.com"], gecko: "bsc", dex: "bsc",
+    rpc: ["https://bsc.drpc.org", "https://bsc-dataseed.bnbchain.org"], gecko: "bsc", dex: "bsc",
     explorer: "https://bscscan.com", poolManager: "0x28e2ea090877bf75740558f6bfb36a5ffee9e9df",
     quotes: { "0x55d398326f99059ff775485246999027b3197955": "USDT", "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d": "USDC" },
     stables: ["0x55d398326f99059ff775485246999027b3197955", "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d"],
@@ -33,7 +33,7 @@ const CHAINS = {
   },
   4663: {
     name: "Robinhood", native: "ETH", wrapped: "0x0bd7d308f8e1639fab988df18a8011f41eacad73",
-    rpc: ["https://robinhood-rpc.publicnode.com", "https://rpc.mainnet.chain.robinhood.com"], gecko: "robinhood", dex: "robinhood",
+    rpc: ["https://rpc.mainnet.chain.robinhood.com", "https://robinhood-rpc.publicnode.com"], gecko: "robinhood", dex: "robinhood",
     explorer: "https://robin.etherscan.io", poolManager: "0x8366a39cc670b4001a1121b8f6a443a643e40951",
     quotes: { [ZERO]: "ETH", "0x5fc5360d0400a0fd4f2af552add042d716f1d168": "USDG", "0x0bd7d308f8e1639fab988df18a8011f41eacad73": "WETH" },
     stables: ["0x5fc5360d0400a0fd4f2af552add042d716f1d168"],
@@ -99,25 +99,50 @@ const store = {
 
 // At most 4 requests at a time per node: free public nodes answer bursts with 429.
 const slots = {};
+const RPC_TIMEOUT = 7_000;
+const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
 async function withSlot(url, fn) {
+  // BSC public endpoints count every call inside a batch toward a strict burst limit.
+  const limit = url.includes("bsc") ? 1 : 4;
   const s = (slots[url] ||= { busy: 0, queue: [] });
-  if (s.busy >= 4) await new Promise((go) => s.queue.push(go));
+  if (s.busy >= limit) await new Promise((go) => s.queue.push(go));
   else s.busy++;
   try { return await fn(); } finally {
+    if (limit === 1) await pause(150);
     const next = s.queue.shift();
     if (next) next(); else s.busy--;
   }
 }
-const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+
+async function fetchRpc(url, body) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), RPC_TIMEOUT);
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      signal: ctrl.signal,
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return await r.json();
+  } catch (e) {
+    if (e?.name === "AbortError") throw new Error(`RPC timeout (${RPC_TIMEOUT / 1000} с)`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function rpcBatch(chainId, calls, chunk = 50) {
   const urls = CHAINS[chainId].rpc;
   const results = new Array(calls.length).fill(null);
   const starts = [];
-  for (let s = 0; s < calls.length; s += chunk) starts.push(s);
+  const batchSize = chainId === 56 ? Math.min(chunk, 20) : chunk;
+  for (let s = 0; s < calls.length; s += batchSize) starts.push(s);
 
   async function runChunk(start) {
-    const slice = calls.slice(start, start + chunk);
+    const slice = calls.slice(start, start + batchSize);
     const body = JSON.stringify(slice.map((c, i) => ({ jsonrpc: "2.0", id: start + i, method: c.method || "eth_call", params: c.params || [{ to: c.to, data: c.data, ...(c.from ? { from: c.from } : {}) }, "latest"] })));
     let lastError, partial = null;
     // Up to 4 rounds over the chain's nodes, waiting 1.5 / 3.5 / 7 s in between (rate limits clear in seconds).
@@ -125,11 +150,7 @@ async function rpcBatch(chainId, calls, chunk = 50) {
       if (round) await pause([0, 1500, 3500, 7000][round]);
       for (const url of urls) {
         try {
-          const items = await withSlot(url, async () => {
-            const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
-            if (!r.ok) throw new Error("HTTP " + r.status);
-            return r.json();
-          });
+          const items = await withSlot(url, () => fetchRpc(url, body));
           if (!Array.isArray(items)) throw new Error("неожиданный ответ узла");
           const isNodeError = (x) => x.error && x.error.code !== 3 && !/revert|invalid opcode|out of gas/i.test(x.error.message || "");
           if (items.length < slice.length || items.some(isNodeError)) {
@@ -276,7 +297,9 @@ async function loadV3(m, owner, entry) {
   // Wallets that farm a lot hold hundreds of closed NFTs: after one full listing only what came in or left
   // is applied (Transfer logs), and the NFT count confirms the list.
   let owned = null;
-  if (entry.v3 && head - entry.v3.block <= 4000) {
+  // Free BSC nodes either disable eth_getLogs or cap it at 100 blocks, so a full
+  // enumerable read is more reliable there than retrying a 4,000-block range.
+  if (m.chainId !== 56 && entry.v3 && head - entry.v3.block <= 4000) {
     const update = await transferUpdate(m, owner, entry.v3.block, head).catch(() => null);
     if (update) {
       const set = new Set(entry.v3.ids);
@@ -332,6 +355,8 @@ async function loadV3(m, owner, entry) {
 }
 
 async function recentTransfersIn(m, owner) {
+  // Krystal supplies BSC V4 ids; the free BSC RPCs cannot serve this 4,000-block log range.
+  if (m.chainId === 56) return [];
   try {
     const [headHex] = await rpcBatch(m.chainId, [{ method: "eth_blockNumber", params: [] }]);
     const head = Number(BigInt(headHex));
