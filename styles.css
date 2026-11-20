@@ -75,6 +75,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .layout { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 16px; align-items: start; }
 @media (max-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr); } }
 .groups { display: grid; gap: 10px; min-width: 0; }
+.card-wrap { display: grid; gap: 5px; justify-items: stretch; }
+.card-hide { justify-self: end; border: 0; background: transparent; color: var(--muted); padding: 3px 8px; cursor: pointer; font-size: 12px; }
+.card-hide:hover { color: var(--red); text-decoration: underline; }
 .detail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 70px); display: grid; gap: 12px; min-width: 0; }
 @media (max-width: 980px) { .detail { position: static; } }
 .note { color: var(--faint); font-size: 12px; margin: 0; }
@@ -135,9 +138,6 @@ th.r, td.r { text-align: right; }
 tr.mine td { background: color-mix(in srgb, var(--blue) 7%, transparent); }
 .badge-n { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font: 700 10px var(--mono); background: var(--panel-2); color: var(--muted); }
 .badge-n.in { background: var(--green); color: #04140d; }
-.position-number { display: flex; align-items: center; gap: 6px; }
-.row-action { height: 26px; display: inline-flex; align-items: center; padding: 0 7px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; font: 11px var(--font); }
-.row-action:hover { color: var(--red); border-color: color-mix(in srgb, var(--red) 55%, var(--line)); background: color-mix(in srgb, var(--red) 8%, transparent); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 h3 { margin: 0; font-size: 14px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 h3 small { color: var(--faint); font-weight: 400; font-size: 11px; }

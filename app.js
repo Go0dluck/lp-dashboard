@@ -18,7 +18,7 @@ const state = {
   groupId: store.get("lpdash.group", null),
   tf: store.get("lpdash.tf", "15m"),
   fitRanges: store.get("lpdash.fit", false),
-  hiddenPositions: new Set(store.get("lpdash.hiddenPositions", [])),
+  hiddenGroups: new Set(store.get("lpdash.hiddenGroups", [])),
   pools: {},           // group id -> { list, at, error }
 };
 
@@ -75,17 +75,17 @@ function visibleWallets() {
   return state.selected === "all" ? state.wallets : state.wallets.filter((w) => w.address === state.selected);
 }
 
-function positionKey(p, walletAddress) {
-  return `${walletAddress}|${p.chainId}|${p.manager}|${p.tokenId}`.toLowerCase();
+function groupKey(g) {
+  return g.id + g.wallet.address;
 }
 
-function groupsForWallet(w) {
-  const positions = (state.data[w.address]?.positions || []).filter((p) => !state.hiddenPositions.has(positionKey(p, w.address)));
-  return LP.groupPositions(positions).map((g) => ({ ...g, wallet: w }));
+function groupsForWallet(w, includeHidden = false) {
+  const groups = state.data[w.address]?.groups || [];
+  return includeHidden ? groups : groups.filter((g) => !state.hiddenGroups.has(groupKey(g)));
 }
 
-function saveHiddenPositions() {
-  store.set("lpdash.hiddenPositions", [...state.hiddenPositions]);
+function saveHiddenGroups() {
+  store.set("lpdash.hiddenGroups", [...state.hiddenGroups]);
 }
 
 // ---------- loading ----------
@@ -159,7 +159,7 @@ function renderTabs() {
   const total = (ws) => ws.reduce((s, w) => s + groupsForWallet(w).reduce((x, g) => x + g.value, 0), 0);
   const tabs = [{ id: "all", name: "Все", value: total(state.wallets) }, ...state.wallets.map((w) => ({ id: w.address, name: w.name, value: total([w]) }))];
   el.innerHTML = tabs.map((t) => `<button class="tab" type="button" role="tab" data-tab="${t.id}" aria-selected="${t.id === state.selected}">${esc(t.name)}<span class="tab-value">${t.value ? usd(t.value) : ""}</span></button>`).join("");
-  document.getElementById("hidden-count").textContent = state.hiddenPositions.size;
+  document.getElementById("hidden-count").textContent = state.hiddenGroups.size;
 }
 
 function renderSummary() {
@@ -208,14 +208,14 @@ function renderGroups() {
   const groups = groupsShown();
   const loading = visibleWallets().some((w) => !state.data[w.address] || (state.data[w.address].loading && !state.data[w.address].loadedAt));
   if (!groups.length) {
-    el.innerHTML = loading ? `<div class="skeleton"></div><div class="skeleton"></div>` : state.hiddenPositions.size ? `<div class="empty"><b>Все позиции скрыты</b><span>Верните нужные позиции через кнопку «Скрытые» в шапке.</span><button class="btn" type="button" data-open-hidden>Показать скрытые</button></div>` : `<div class="empty"><b>Открытых позиций нет</b><span>В этих кошельках нет открытых позиций Uniswap V3/V4 и PancakeSwap V3.</span></div>`;
+    el.innerHTML = loading ? `<div class="skeleton"></div><div class="skeleton"></div>` : state.hiddenGroups.size ? `<div class="empty"><b>Все позиции скрыты</b><span>Верните нужные карточки через кнопку «Скрытые» в шапке.</span><button class="btn" type="button" data-open-hidden>Показать скрытые</button></div>` : `<div class="empty"><b>Открытых позиций нет</b><span>В этих кошельках нет открытых позиций Uniswap V3/V4 и PancakeSwap V3.</span></div>`;
     return;
   }
   if (!groups.some((g) => g.id + g.wallet.address === state.groupId)) state.groupId = groups[0].id + groups[0].wallet.address;
   el.innerHTML = groups.map((g) => {
     const key = g.id + g.wallet.address;
     const pnlPct = g.pnl != null && g.deposited ? pct(g.pnl / g.deposited) : "";
-    return `<button class="card" type="button" data-group="${esc(key)}" aria-current="${key === state.groupId}">
+    return `<div class="card-wrap"><button class="card" type="button" data-group="${esc(key)}" aria-current="${key === state.groupId}">
       <div class="card-head">${coinIcon(g)}
         <div class="card-title"><b>${esc(g.pair)}</b><span>${esc(g.chainName)} · ${esc(g.project)} · ${fee(g.feeTier)}${state.selected === "all" && state.wallets.length > 1 ? " · " + esc(g.wallet.name) : ""}</span></div>
         <div class="card-right"><b>${usd(g.value)}</b><span>${price(g.price)}</span></div>
@@ -228,7 +228,7 @@ function renderGroups() {
         <div class="kv right"><span class="k">PnL</span><span class="v ${pnlClass(g.pnl)}">${signedUsd(g.pnl)} <small>${pnlPct}</small></span></div>
       </div>
       <div class="foot"><span>${g.deposited ? "Вложено " + usd(g.deposited) + " → сейчас " + usd(g.value) : "Вложения неизвестны"}</span><span>${g.positions.length} поз. · ${g.inRange} в диапазоне</span></div>
-    </button>`;
+    </button><button class="card-hide" type="button" data-hide-group="${esc(key)}">Скрыть позицию</button></div>`;
   }).join("");
 }
 
@@ -273,7 +273,7 @@ function renderDetail() {
   const rows = g.positions.map((p) => {
     const dist = p.inRange ? "в диапазоне" : (g.price > p.highUSD ? "до входа " + pct(p.highUSD / g.price - 1) : "до входа " + pct(p.lowUSD / g.price - 1));
     const coinAmt = p.coin === 0 ? [p.amount0, p.token0.symbol, p.amount1, p.token1.symbol] : [p.amount1, p.token1.symbol, p.amount0, p.token0.symbol];
-    return `<tr><td><span class="position-number"><span class="badge-n ${p.inRange ? "in" : ""}">${p.number}</span><button class="row-action" type="button" data-hide-position="${esc(positionKey(p, g.wallet.address))}" title="Скрыть позицию" aria-label="Скрыть позицию #${p.tokenId}">Скрыть</button></span></td>
+    return `<tr><td><span class="badge-n ${p.inRange ? "in" : ""}">${p.number}</span></td>
       <td>${price(p.lowUSD)} – ${price(p.highUSD)}</td>
       <td class="text ${p.inRange ? "up" : "muted"}">${dist}</td>
       <td>${amount(coinAmt[0])} ${esc(coinAmt[1])} · ${amount(coinAmt[2])} ${esc(coinAmt[3])}</td>
@@ -283,7 +283,7 @@ function renderDetail() {
   }).join("");
   document.getElementById("d-positions").innerHTML = `
     <div class="panel"><h3>Позиции (${g.positions.length})<small>диапазоны в $ за 1 ${esc(g.coin.symbol)}</small></h3>
-      <div class="table-wrap"><table><thead><tr><th>Позиция</th><th>Диапазон</th><th>Где цена</th><th>Монеты</th><th class="r">Стоимость</th><th class="r">Комиссии</th><th class="r">PnL</th><th>NFT</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+      <div class="table-wrap"><table><thead><tr><th>№</th><th>Диапазон</th><th>Где цена</th><th>Монеты</th><th class="r">Стоимость</th><th class="r">Комиссии</th><th class="r">PnL</th><th>NFT</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   document.getElementById("d-pools").innerHTML = `<div class="panel" id="pools-panel">${poolsHTML(g)}</div>`;
   ensureChart();
   drawLines(g);
@@ -425,7 +425,7 @@ setInterval(() => { const g = currentGroup(); if (g && series) loadCandles(g); }
 // ---------- events ----------
 
 document.addEventListener("click", async (e) => {
-  const t = e.target.closest("[data-tab],[data-group],[data-tf],[data-fit],[data-copy],[data-open-wallets],[data-open-hidden],[data-hide-position],[data-show-position],[data-show-all-positions],[data-remove]");
+  const t = e.target.closest("[data-tab],[data-group],[data-tf],[data-fit],[data-copy],[data-open-wallets],[data-open-hidden],[data-hide-group],[data-show-group],[data-show-all-groups],[data-remove]");
   if (!t) return;
   if (t.dataset.tab) {
     state.selected = t.dataset.tab; store.set("lpdash.selected", state.selected);
@@ -445,18 +445,18 @@ document.addEventListener("click", async (e) => {
     openWallets();
   } else if (t.hasAttribute("data-open-hidden")) {
     openHiddenPositions();
-  } else if (t.dataset.hidePosition) {
-    state.hiddenPositions.add(t.dataset.hidePosition);
-    saveHiddenPositions();
+  } else if (t.dataset.hideGroup) {
+    state.hiddenGroups.add(t.dataset.hideGroup);
+    saveHiddenGroups();
     state.groupId = null;
     render();
-  } else if (t.dataset.showPosition) {
-    state.hiddenPositions.delete(t.dataset.showPosition);
-    saveHiddenPositions();
+  } else if (t.dataset.showGroup) {
+    state.hiddenGroups.delete(t.dataset.showGroup);
+    saveHiddenGroups();
     renderHiddenPositions(); render();
-  } else if (t.hasAttribute("data-show-all-positions")) {
-    state.hiddenPositions.clear();
-    saveHiddenPositions();
+  } else if (t.hasAttribute("data-show-all-groups")) {
+    state.hiddenGroups.clear();
+    saveHiddenGroups();
     document.getElementById("hidden-dialog").close();
     render();
   } else if (t.dataset.remove) {
@@ -490,9 +490,9 @@ function openHiddenPositions() {
 }
 
 function renderHiddenPositions() {
-  const loaded = state.wallets.flatMap((w) => (state.data[w.address]?.positions || []).map((p) => ({ p, w, key: positionKey(p, w.address) })));
-  const hidden = loaded.filter(({ key }) => state.hiddenPositions.has(key));
-  document.getElementById("hidden-list").innerHTML = hidden.map(({ p, w, key }) => `<li><span><b>#${p.tokenId}</b><small>${esc(p.token0.symbol)} / ${esc(p.token1.symbol)} · ${esc(w.name)}</small></span><button class="btn ghost" type="button" data-show-position="${esc(key)}">Показать</button></li>`).join("") || `<li class="muted">Скрытых загруженных позиций нет</li>`;
+  const loaded = state.wallets.flatMap((w) => groupsForWallet(w, true));
+  const hidden = loaded.filter((g) => state.hiddenGroups.has(groupKey(g)));
+  document.getElementById("hidden-list").innerHTML = hidden.map((g) => `<li><span><b>${esc(g.pair)}</b><small>${esc(g.chainName)} · ${esc(g.project)} · ${esc(g.wallet.name)}</small></span><button class="btn ghost" type="button" data-show-group="${esc(groupKey(g))}">Показать</button></li>`).join("") || `<li class="muted">Скрытых позиций нет</li>`;
 }
 document.getElementById("wallet-form").addEventListener("submit", (e) => {
   e.preventDefault();
