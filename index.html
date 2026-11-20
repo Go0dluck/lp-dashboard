@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=20261120-2">
 </head>
 <body>
 <header class="top">
@@ -21,6 +21,10 @@
     <nav id="wallet-tabs" class="tabs" aria-label="Кошельки"></nav>
     <div class="top-right">
       <span id="status" class="status" aria-live="polite"></span>
+      <button id="hidden-btn" class="icon-btn hidden-btn" type="button" title="Скрытые позиции" aria-label="Скрытые позиции" hidden>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.7 2.7M9.9 4.2A10.8 10.8 0 0 1 12 4c5.5 0 9 5 9 5a15.8 15.8 0 0 1-2.1 2.5M6.6 6.6C4.4 8 3 10 3 10s3.5 5 9 5c1 0 2-.2 2.8-.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span id="hidden-count" class="icon-count">0</span>
+      </button>
       <button id="refresh" class="icon-btn" type="button" title="Обновить сейчас" aria-label="Обновить сейчас">
         <svg viewBox="0 0 24 24" width="18" height="18"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -64,9 +68,18 @@
   </form>
 </dialog>
 
+<dialog id="hidden-dialog" class="dialog">
+  <div class="dialog-body">
+    <h2>Скрытые позиции</h2>
+    <p class="muted">Они не участвуют в карточках пулов и итоговых суммах на этом устройстве.</p>
+    <ul id="hidden-list" class="wallet-list hidden-list"></ul>
+    <div class="dialog-foot"><button class="btn ghost" type="button" data-show-all-positions>Показать все</button><button id="hidden-close" class="btn" type="button">Готово</button></div>
+  </div>
+</dialog>
+
 <script src="vendor/ethers.umd.min.js?v=6.13.2"></script>
 <script src="vendor/lightweight-charts.standalone.production.js?v=4.2.0"></script>
 <script src="chain.js?v=20261120-1"></script>
-<script src="app.js?v=20261030-1"></script>
+<script src="app.js?v=20261120-2"></script>
 </body>
 </html>
