@@ -18,7 +18,7 @@ const state = {
   groupId: store.get("lpdash.group", null),
   tf: store.get("lpdash.tf", "15m"),
   fitRanges: store.get("lpdash.fit", false),
-  hiddenGroups: new Set(store.get("lpdash.hiddenGroups", [])),
+  hiddenGroups: new Set(store.get("lpdash.hiddenPools", [])),
   pools: {},           // group id -> { list, at, error }
 };
 
@@ -76,7 +76,7 @@ function visibleWallets() {
 }
 
 function groupKey(g) {
-  return g.id + g.wallet.address;
+  return g.id;
 }
 
 function groupsForWallet(w, includeHidden = false) {
@@ -85,7 +85,7 @@ function groupsForWallet(w, includeHidden = false) {
 }
 
 function saveHiddenGroups() {
-  store.set("lpdash.hiddenGroups", [...state.hiddenGroups]);
+  store.set("lpdash.hiddenPools", [...state.hiddenGroups]);
 }
 
 // ---------- loading ----------
@@ -228,7 +228,7 @@ function renderGroups() {
         <div class="kv right"><span class="k">PnL</span><span class="v ${pnlClass(g.pnl)}">${signedUsd(g.pnl)} <small>${pnlPct}</small></span></div>
       </div>
       <div class="foot"><span>${g.deposited ? "Вложено " + usd(g.deposited) + " → сейчас " + usd(g.value) : "Вложения неизвестны"}</span><span>${g.positions.length} поз. · ${g.inRange} в диапазоне</span></div>
-    </button><button class="card-hide" type="button" data-hide-group="${esc(key)}">Скрыть позицию</button></div>`;
+    </button><button class="card-hide" type="button" data-hide-group="${esc(groupKey(g))}">Скрыть позицию</button></div>`;
   }).join("");
 }
 
@@ -490,7 +490,7 @@ function openHiddenPositions() {
 }
 
 function renderHiddenPositions() {
-  const loaded = state.wallets.flatMap((w) => groupsForWallet(w, true));
+  const loaded = [...new Map(state.wallets.flatMap((w) => groupsForWallet(w, true)).map((g) => [groupKey(g), g])).values()];
   const hidden = loaded.filter((g) => state.hiddenGroups.has(groupKey(g)));
   document.getElementById("hidden-list").innerHTML = hidden.map((g) => `<li><span><b>${esc(g.pair)}</b><small>${esc(g.chainName)} · ${esc(g.project)} · ${esc(g.wallet.name)}</small></span><button class="btn ghost" type="button" data-show-group="${esc(groupKey(g))}">Показать</button></li>`).join("") || `<li class="muted">Скрытых позиций нет</li>`;
 }
